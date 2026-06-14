@@ -62,6 +62,23 @@
   color: var(--text-error);
 }
 
+.opencode-chat-message-markdown {
+  font-family: var(--font-text);
+  font-size: var(--font-text-size);
+}
+
+.opencode-chat-message-markdown > :first-child {
+  margin-top: 0;
+}
+
+.opencode-chat-message-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.opencode-chat-message-markdown pre {
+  white-space: pre-wrap;
+}
+
 .opencode-chat-detail-summary {
   align-items: center;
   color: var(--text-muted);
@@ -442,6 +459,10 @@
 .opencode-chat-send:disabled {
   box-shadow: none;
   opacity: 0.6;
+}
+
+.opencode-chat-send[aria-label="Stop response"] {
+  color: var(--text-accent);
 }
 
 .opencode-chat-status {

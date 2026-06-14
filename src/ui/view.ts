@@ -1,4 +1,4 @@
-import { ItemView, Notice, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownRenderer, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import { ChatMessage, ChatMessageDetail, ReasoningEffort } from "../shared/types";
 import OpenCodeChatPlugin from "../plugin/plugin";
 import { effortLabel, formatError, selectedModelValue, updateEffortFavorite, updateStringFavorite } from "./helpers";
@@ -17,6 +17,8 @@ export class OpenCodeChatView extends ItemView {
   private modelOptions: PickerOption[] = [];
   private messages: ChatMessage[] = [];
   private pending = false;
+  private activeRequest: ActiveChatRequest | null = null;
+  private nextRequestId = 1;
   private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
     const target = event.target;
     if (!(target instanceof Node)) {
@@ -56,7 +58,7 @@ export class OpenCodeChatView extends ItemView {
       attr: { placeholder: "Message opencode..." },
     });
     this.inputEl.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         void this.submit();
       }
@@ -127,6 +129,11 @@ export class OpenCodeChatView extends ItemView {
     });
     setIcon(this.sendButtonEl, "send-horizontal");
     this.sendButtonEl.addEventListener("click", () => {
+      if (this.pending) {
+        this.interruptCurrentRequest();
+        return;
+      }
+
       void this.submit();
     });
     this.renderMessages();
@@ -146,6 +153,11 @@ export class OpenCodeChatView extends ItemView {
     }
 
     this.pending = true;
+    const activeRequest: ActiveChatRequest = {
+      id: this.nextRequestId++,
+      interrupted: false,
+    };
+    this.activeRequest = activeRequest;
     this.inputEl.value = "";
     this.messages.push({ role: "user", text });
     const assistantMessage: ChatMessage = { role: "assistant", text: "", details: [] };
@@ -156,15 +168,27 @@ export class OpenCodeChatView extends ItemView {
 
     try {
       const updateAssistantMessage = (response: { text: string; details: ChatMessageDetail[] }): void => {
+        if (!this.isCurrentRequest(activeRequest)) {
+          return;
+        }
+
         assistantMessage.text = response.text;
         assistantMessage.details = response.details;
         this.renderMessages();
       };
       const response = await this.plugin.sendChatMessage(text, updateAssistantMessage);
+      if (!this.isCurrentRequest(activeRequest)) {
+        return;
+      }
+
       assistantMessage.text = response.text;
       assistantMessage.details = response.details;
       this.setStatus("");
     } catch (error) {
+      if (!this.isCurrentRequest(activeRequest)) {
+        return;
+      }
+
       const message = formatError(error);
       assistantMessage.role = "error";
       assistantMessage.text = message;
@@ -172,10 +196,13 @@ export class OpenCodeChatView extends ItemView {
       this.setStatus("Request failed.");
       new Notice(`OpenCode request failed: ${message}`);
     } finally {
-      this.pending = false;
-      this.renderMessages();
-      this.updateControls();
-      this.inputEl.focus();
+      if (this.activeRequest?.id === activeRequest.id) {
+        this.pending = false;
+        this.activeRequest = null;
+        this.renderMessages();
+        this.updateControls();
+        this.inputEl.focus();
+      }
     }
   }
 
@@ -190,19 +217,23 @@ export class OpenCodeChatView extends ItemView {
       return;
     }
 
+    const lastAssistantMessage = [...this.messages].reverse().find((message) => message.role === "assistant");
+
     for (const message of this.messages) {
+      const isActiveAssistantMessage = this.pending && message === this.messages[this.messages.length - 1];
       const messageEl = this.historyEl.createDiv({
         cls: `opencode-chat-message opencode-chat-message-${message.role}`,
       });
       if (message.role === "assistant" && message.details && message.details.length > 0) {
-        this.renderMessageDetails(messageEl, message.details);
+        this.renderMessageDetails(
+          messageEl,
+          message.details,
+          !message.text && (isActiveAssistantMessage || message === lastAssistantMessage),
+        );
       }
 
       if (message.text) {
-        messageEl.createEl("pre", {
-          cls: "opencode-chat-message-text",
-          text: message.text,
-        });
+        this.renderMessageText(messageEl, message);
       }
     }
 
@@ -211,24 +242,62 @@ export class OpenCodeChatView extends ItemView {
 
   private updateControls(): void {
     this.inputEl.disabled = this.pending;
-    this.sendButtonEl.disabled = this.pending;
+    this.sendButtonEl.disabled = false;
     this.modelPickerButtonEl.disabled = this.pending;
     this.effortPickerButtonEl.disabled = this.pending;
+    this.sendButtonEl.setAttribute("aria-label", this.pending ? "Stop response" : "Send message");
+    this.sendButtonEl.setAttribute("title", this.pending ? "Stop" : "Send");
+    this.sendButtonEl.empty();
+    setIcon(this.sendButtonEl, this.pending ? "square" : "send-horizontal");
     if (this.pending) {
       this.closePickerMenu();
     }
+  }
+
+  private interruptCurrentRequest(): void {
+    if (!this.activeRequest) {
+      return;
+    }
+
+    this.activeRequest.interrupted = true;
+    this.activeRequest = null;
+    this.pending = false;
+    this.plugin.resetSession();
+    this.setStatus("Request interrupted.");
+    this.renderMessages();
+    this.updateControls();
+    this.inputEl.focus();
+  }
+
+  private isCurrentRequest(request: ActiveChatRequest): boolean {
+    return this.activeRequest?.id === request.id && !request.interrupted;
   }
 
   private setStatus(text: string): void {
     this.statusEl.setText(text);
   }
 
-  private renderMessageDetails(parentEl: HTMLElement, details: ChatMessageDetail[]): void {
-    for (const detail of details) {
+  private renderMessageText(parentEl: HTMLElement, message: ChatMessage): void {
+    if (message.role === "assistant") {
+      const textEl = parentEl.createDiv({ cls: "opencode-chat-message-text opencode-chat-message-markdown markdown-rendered" });
+      void MarkdownRenderer.renderMarkdown(message.text, textEl, "", this).catch(() => {
+        textEl.setText(message.text);
+      });
+      return;
+    }
+
+    parentEl.createEl("pre", {
+      cls: "opencode-chat-message-text",
+      text: message.text,
+    });
+  }
+
+  private renderMessageDetails(parentEl: HTMLElement, details: ChatMessageDetail[], openLastDetail: boolean): void {
+    details.forEach((detail, index) => {
       const detailEl = parentEl.createEl("details", {
         cls: `opencode-chat-detail opencode-chat-detail-${detail.kind}`,
-        attr: { open: "" },
-      });
+      }) as HTMLDetailsElement;
+      detailEl.open = openLastDetail && index === details.length - 1;
       detailEl.createEl("summary", {
         cls: "opencode-chat-detail-summary",
       });
@@ -239,7 +308,7 @@ export class OpenCodeChatView extends ItemView {
           text: detail.text,
         });
       }
-    }
+    });
   }
 
   private renderDetailSummary(detailEl: HTMLElement, detail: ChatMessageDetail): void {
@@ -469,6 +538,11 @@ interface PickerOption {
   value: string;
   label: string;
   effortOptions?: ReasoningEffort[];
+}
+
+interface ActiveChatRequest {
+  id: number;
+  interrupted: boolean;
 }
 
 interface PickerMenuConfig {

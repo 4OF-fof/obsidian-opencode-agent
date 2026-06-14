@@ -17,7 +17,14 @@ export interface OpenCodeAssistantResponse {
   details: ChatMessageDetail[];
 }
 
-export function extractAssistantResponse(value: unknown): OpenCodeAssistantResponse {
+export interface ExtractAssistantResponseOptions {
+  includeFallbackText?: boolean;
+}
+
+export function extractAssistantResponse(
+  value: unknown,
+  options: ExtractAssistantResponseOptions = {},
+): OpenCodeAssistantResponse {
   const parts = readMessageParts(value);
   const texts: string[] = [];
   const fallbackTexts: string[] = [];
@@ -42,7 +49,7 @@ export function extractAssistantResponse(value: unknown): OpenCodeAssistantRespo
   }
 
   return {
-    text: texts.join("\n").trim() || fallbackTexts.join("\n").trim(),
+    text: texts.join("\n").trim() || (options.includeFallbackText ? fallbackTexts.join("\n").trim() : ""),
     details,
   };
 }

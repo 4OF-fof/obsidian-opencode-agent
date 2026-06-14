@@ -14,6 +14,9 @@ import { OpenCodeChatSettings, OpenCodeModelOption } from "../shared/types";
 
 export { OpenCodeAssistantResponse } from "./messages";
 
+const RESPONSE_TIMEOUT_MS = 10 * 60 * 1000;
+const POLL_INTERVAL_MS = 500;
+
 export class OpenCodeClient {
   constructor(private readonly settings: OpenCodeChatSettings) {}
 
@@ -53,7 +56,7 @@ export class OpenCodeClient {
     });
 
     const response = await this.waitForAssistantResponse(sessionId, previousMessages.length, onUpdate);
-    return extractAssistantResponse(response);
+    return extractAssistantResponse(response, { includeFallbackText: true });
   }
 
   private async listSessionMessages(sessionId: string): Promise<unknown[]> {
@@ -65,7 +68,7 @@ export class OpenCodeClient {
     previousMessageCount: number,
     onUpdate?: AssistantUpdateHandler,
   ): Promise<unknown[]> {
-    const deadline = Date.now() + 120_000;
+    const deadline = Date.now() + RESPONSE_TIMEOUT_MS;
     let previousSnapshot = "";
 
     while (Date.now() < deadline) {
@@ -84,10 +87,10 @@ export class OpenCodeClient {
         return completedMessages;
       }
 
-      await sleep(250);
+      await sleep(POLL_INTERVAL_MS);
     }
 
-    throw new Error("Timed out waiting for opencode response.");
+    throw new Error(`Timed out waiting for opencode response after ${Math.round(RESPONSE_TIMEOUT_MS / 1000)} seconds.`);
   }
 
   private async requestJson<T>(path: string, init: Partial<RequestUrlParam> = {}): Promise<T> {
