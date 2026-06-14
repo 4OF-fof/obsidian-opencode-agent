@@ -63,6 +63,9 @@ export class OpenCodeChatView extends ItemView {
         void this.submit();
       }
     });
+    this.inputEl.addEventListener("input", () => {
+      this.resizeInput();
+    });
 
     const controlsEl = composerEl.createDiv({ cls: "opencode-chat-controls" });
     const selectorGroupEl = controlsEl.createDiv({ cls: "opencode-chat-selectors" });
@@ -125,7 +128,7 @@ export class OpenCodeChatView extends ItemView {
 
     this.sendButtonEl = controlsEl.createEl("button", {
       cls: "opencode-chat-send",
-      attr: { "aria-label": "Send message", title: "Send" },
+      attr: { "aria-label": "Send message", type: "button" },
     });
     setIcon(this.sendButtonEl, "send-horizontal");
     this.sendButtonEl.addEventListener("click", () => {
@@ -138,6 +141,7 @@ export class OpenCodeChatView extends ItemView {
     });
     this.renderMessages();
     this.updatePickerLabels();
+    this.resizeInput();
     void this.populateModelSelect();
   }
 
@@ -159,11 +163,12 @@ export class OpenCodeChatView extends ItemView {
     };
     this.activeRequest = activeRequest;
     this.inputEl.value = "";
+    this.resizeInput();
     this.messages.push({ role: "user", text });
     const assistantMessage: ChatMessage = { role: "assistant", text: "", details: [] };
     this.messages.push(assistantMessage);
     this.renderMessages();
-    this.setStatus("Waiting for opencode...");
+    this.setStatus("");
     this.updateControls();
 
     try {
@@ -234,6 +239,11 @@ export class OpenCodeChatView extends ItemView {
 
       if (message.text) {
         this.renderMessageText(messageEl, message);
+      } else if (isActiveAssistantMessage && message.role === "assistant" && (!message.details || message.details.length === 0)) {
+        messageEl.createDiv({
+          cls: "opencode-chat-message-waiting",
+          text: "Waiting for response...",
+        });
       }
     }
 
@@ -246,7 +256,6 @@ export class OpenCodeChatView extends ItemView {
     this.modelPickerButtonEl.disabled = this.pending;
     this.effortPickerButtonEl.disabled = this.pending;
     this.sendButtonEl.setAttribute("aria-label", this.pending ? "Stop response" : "Send message");
-    this.sendButtonEl.setAttribute("title", this.pending ? "Stop" : "Send");
     this.sendButtonEl.empty();
     setIcon(this.sendButtonEl, this.pending ? "square" : "send-horizontal");
     if (this.pending) {
@@ -277,16 +286,24 @@ export class OpenCodeChatView extends ItemView {
     this.statusEl.setText(text);
   }
 
+  private resizeInput(): void {
+    this.inputEl.style.height = "auto";
+    this.inputEl.style.height = `${Math.min(this.inputEl.scrollHeight, maxInputHeight(this.inputEl))}px`;
+  }
+
   private renderMessageText(parentEl: HTMLElement, message: ChatMessage): void {
+    const wrapperEl = parentEl.createDiv({ cls: "opencode-chat-copyable" });
+    this.addCopyButton(wrapperEl, message.text);
+
     if (message.role === "assistant") {
-      const textEl = parentEl.createDiv({ cls: "opencode-chat-message-text opencode-chat-message-markdown markdown-rendered" });
+      const textEl = wrapperEl.createDiv({ cls: "opencode-chat-message-text opencode-chat-message-markdown markdown-rendered" });
       void MarkdownRenderer.renderMarkdown(message.text, textEl, "", this).catch(() => {
         textEl.setText(message.text);
       });
       return;
     }
 
-    parentEl.createEl("pre", {
+    wrapperEl.createEl("pre", {
       cls: "opencode-chat-message-text",
       text: message.text,
     });
@@ -303,7 +320,8 @@ export class OpenCodeChatView extends ItemView {
       });
       this.renderDetailSummary(detailEl, detail);
       if (detail.text) {
-        detailEl.createEl("pre", {
+        const textWrapEl = detailEl.createDiv({ cls: "opencode-chat-detail-text-wrap" });
+        textWrapEl.createEl("pre", {
           cls: "opencode-chat-detail-text",
           text: detail.text,
         });
@@ -323,6 +341,28 @@ export class OpenCodeChatView extends ItemView {
       cls: "opencode-chat-detail-title",
       text: detail.kind === "reasoning" ? "Thinking" : detail.title,
     });
+  }
+
+  private addCopyButton(parentEl: HTMLElement, text: string): void {
+    const buttonEl = parentEl.createEl("button", {
+      cls: "opencode-chat-copy",
+      attr: { type: "button", "aria-label": "Copy message" },
+    });
+    setIcon(buttonEl, "copy");
+    buttonEl.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.copyText(text);
+    });
+  }
+
+  private async copyText(text: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+      new Notice("Copied.");
+    } catch (error) {
+      new Notice(`Unable to copy: ${formatError(error)}`);
+    }
   }
 
   private async populateModelSelect(): Promise<void> {
@@ -569,4 +609,10 @@ function sortSelectedFirst(options: PickerOption[], selectedValue: string): Pick
     }
     return 0;
   });
+}
+
+function maxInputHeight(inputEl: HTMLTextAreaElement): number {
+  const style = window.getComputedStyle(inputEl);
+  const minHeight = parseFloat(style.minHeight) || inputEl.clientHeight || 56;
+  return minHeight * 3;
 }

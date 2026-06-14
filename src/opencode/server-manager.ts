@@ -1,16 +1,23 @@
 import { ChildProcess, spawn } from "node:child_process";
-import { parseServerAddress } from "./address";
 import { OpenCodeClient } from "./client";
 import { OpenCodeChatSettings } from "../shared/types";
+
+const MANAGED_SERVER_HOST = "127.0.0.1";
+const MANAGED_SERVER_PORT = 4097;
+const MANAGED_SERVER_ADDRESS = `${MANAGED_SERVER_HOST}:${MANAGED_SERVER_PORT}`;
 
 export class OpenCodeServerManager {
   private process: ChildProcess | null = null;
   private startPromise: Promise<void> | null = null;
+  private activeServerAddress: string | null = null;
 
-  constructor(private readonly getSettings: () => OpenCodeChatSettings) {}
+  constructor(
+    private readonly getSettings: () => OpenCodeChatSettings,
+    private readonly getWorkingDirectory: () => string | undefined,
+  ) {}
 
   async ensureStarted(): Promise<void> {
-    if (await this.isHealthy()) {
+    if (this.process && this.activeServerAddress && await this.isHealthy(this.activeServerAddress)) {
       return;
     }
 
@@ -21,12 +28,20 @@ export class OpenCodeServerManager {
     await this.startPromise;
   }
 
+  clientSettings(): OpenCodeChatSettings {
+    return {
+      ...this.getSettings(),
+      serverAddress: this.activeServerAddress ?? MANAGED_SERVER_ADDRESS,
+    };
+  }
+
   stop(): void {
     if (this.process && !this.process.killed) {
       this.process.kill();
     }
     this.process = null;
     this.startPromise = null;
+    this.activeServerAddress = null;
   }
 
   reset(): void {
@@ -35,14 +50,15 @@ export class OpenCodeServerManager {
 
   private async start(): Promise<void> {
     const settings = this.getSettings();
-    const address = parseServerAddress(settings.serverAddress);
     const command = settings.opencodeCommand.trim() || "opencode";
     const env = { ...process.env };
-
+    const cwd = this.getWorkingDirectory();
+    this.activeServerAddress = MANAGED_SERVER_ADDRESS;
     this.process = spawn(
       command,
-      ["serve", "--hostname", address.host, "--port", String(address.port)],
+      ["serve", "--hostname", MANAGED_SERVER_HOST, "--port", String(MANAGED_SERVER_PORT)],
       {
+        cwd,
         env,
         shell: true,
         stdio: "ignore",
@@ -55,16 +71,21 @@ export class OpenCodeServerManager {
       this.startPromise = null;
     });
 
-    await this.waitUntilHealthy();
+    try {
+      await this.waitUntilHealthy(this.activeServerAddress);
+    } catch (error) {
+      this.stop();
+      throw error;
+    }
   }
 
-  private async waitUntilHealthy(): Promise<void> {
+  private async waitUntilHealthy(serverAddress: string): Promise<void> {
     const deadline = Date.now() + 15_000;
     let lastError = "";
 
     while (Date.now() < deadline) {
       try {
-        const health = await new OpenCodeClient(this.getSettings()).health();
+        const health = await new OpenCodeClient({ ...this.getSettings(), serverAddress }).health();
         if (health.healthy) {
           return;
         }
@@ -78,9 +99,9 @@ export class OpenCodeServerManager {
     throw new Error(lastError || "Timed out waiting for opencode server.");
   }
 
-  private async isHealthy(): Promise<boolean> {
+  private async isHealthy(serverAddress: string): Promise<boolean> {
     try {
-      const health = await new OpenCodeClient(this.getSettings()).health();
+      const health = await new OpenCodeClient({ ...this.getSettings(), serverAddress }).health();
       return health.healthy;
     } catch {
       return false;

@@ -1,5 +1,4 @@
-import { App, Notice, PluginSettingTab, setIcon, Setting } from "obsidian";
-import { normalizeServerAddress } from "../opencode/address";
+import { App, PluginSettingTab, setIcon, Setting } from "obsidian";
 import OpenCodeChatPlugin from "../plugin/plugin";
 import { ReasoningEffort } from "../shared/types";
 import { effortLabel, formatError, selectedModelValue, updateEffortFavorite, updateStringFavorite } from "./helpers";
@@ -14,24 +13,6 @@ export class OpenCodeChatSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     containerEl.createEl("h2", { text: "OpenCode Chat" });
-
-    new Setting(containerEl)
-      .setName("Server")
-      .setDesc("opencode server address.")
-      .addText((text) =>
-        text
-          .setPlaceholder("localhost:4096")
-          .setValue(this.plugin.settings.serverAddress)
-          .onChange(async (value) => {
-            try {
-              this.plugin.settings.serverAddress = normalizeServerAddress(value);
-              this.plugin.resetServer();
-              await this.plugin.saveSettings();
-            } catch (error) {
-              new Notice(`Invalid server address: ${formatError(error)}`);
-            }
-          }),
-      );
 
     const selectedModel = `${this.plugin.settings.providerID}/${this.plugin.settings.modelID}`;
 
