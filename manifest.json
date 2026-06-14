@@ -1,0 +1,10 @@
+{
+  "id": "opencode-chat",
+  "name": "OpenCode Chat",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Minimal chat window that starts and talks to opencode.",
+  "author": "fof",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}
