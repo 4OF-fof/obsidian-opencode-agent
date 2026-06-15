@@ -1,0 +1,14 @@
+.opencode-agent-config-file-icon {
+  color: var(--text-normal);
+  display: inline-flex;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  width: 14px;
+}
+
+.opencode-agent-config-file-icon svg {
+  height: 14px;
+  stroke-width: 2.2;
+  width: 14px;
+}

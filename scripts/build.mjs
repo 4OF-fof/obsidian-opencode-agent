@@ -6,7 +6,6 @@ import { join } from "node:path";
 const watch = process.argv.includes("--watch");
 const root = process.cwd();
 const dist = join(root, "dist");
-const stylesDir = join(root, "src", "chat", "styles");
 const staticFiles = ["manifest.json", "README.md"];
 
 function buildStyles() {
@@ -14,11 +13,11 @@ function buildStyles() {
 
   const styleFiles = readFileSync(join(root, "styles.css"), "utf8")
     .split(/\r?\n/)
-    .map((line) => line.match(/^@import url\("\.\/src\/chat\/styles\/([^"]+\.css)"\);$/)?.[1])
+    .map((line) => line.match(/^@import url\("\.\/([^"]+\.css)"\);$/)?.[1])
     .filter(Boolean);
 
   const styles = styleFiles
-    .map((file) => readFileSync(join(stylesDir, file), "utf8").trim())
+    .map((file) => readFileSync(join(root, file), "utf8").trim())
     .join("\n\n");
 
   writeFileSync(join(dist, "styles.css"), `${styles}\n`);
