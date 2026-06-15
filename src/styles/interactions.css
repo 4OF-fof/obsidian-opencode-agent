@@ -1,0 +1,19 @@
+.opencode-chat-header-button:focus:not(:hover),
+.opencode-chat-picker:focus:not(:hover),
+.opencode-chat-picker-item:focus:not(:hover),
+.opencode-chat-picker-favorite:focus:not(:hover),
+.opencode-chat-send:focus:not(:hover),
+.opencode-session-history-item:focus:not(:hover),
+.opencode-session-history-action:focus:not(:hover) {
+  background: transparent !important;
+}
+
+.opencode-chat-header-button:focus-visible,
+.opencode-chat-picker:focus-visible,
+.opencode-chat-picker-item:focus-visible,
+.opencode-chat-picker-favorite:focus-visible,
+.opencode-chat-send:focus-visible,
+.opencode-session-history-item:focus-visible,
+.opencode-session-history-action:focus-visible {
+  background: var(--background-modifier-hover) !important;
+}

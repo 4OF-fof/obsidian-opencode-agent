@@ -1,0 +1,215 @@
+.opencode-chat-empty {
+  color: var(--text-muted);
+  padding: 10px;
+  text-align: center;
+}
+
+.opencode-chat-message {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+.opencode-chat-message-user {
+  margin-bottom: 4px;
+}
+
+.opencode-chat-message-details-only {
+  margin-bottom: 0;
+}
+
+.opencode-chat-message-details-only + .opencode-chat-message-details-only {
+  margin-top: 0;
+}
+
+.opencode-chat-message-details-only + .opencode-chat-message-final {
+  margin-top: 0;
+}
+
+.opencode-chat-message-user,
+.opencode-chat-message-assistant,
+.opencode-chat-message-error {
+  align-items: stretch;
+}
+
+.opencode-chat-message-text {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 100%;
+  padding: 0 12px;
+  -webkit-user-select: text;
+  user-select: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.opencode-chat-message-text *,
+.opencode-chat-detail-text,
+.opencode-chat-detail-text * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.opencode-chat-message-user .opencode-chat-message-text {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+  padding: 8px 10px;
+}
+
+.opencode-chat-message-error .opencode-chat-message-text {
+  background: var(--background-modifier-error);
+  color: var(--text-error);
+}
+
+.opencode-chat-message-waiting {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+  padding: 7px 12px;
+}
+
+.opencode-chat-message-markdown {
+  font-family: var(--font-text);
+  font-size: var(--font-text-size);
+  padding-left: 0 !important;
+  white-space: normal;
+}
+
+.opencode-chat-message-assistant > .opencode-chat-detail:first-child {
+  margin-top: 0;
+}
+
+.opencode-chat-message-markdown pre {
+  white-space: pre-wrap;
+}
+
+.opencode-chat-final {
+  border-top: 1px solid var(--background-modifier-border);
+  margin-top: 6px;
+  padding-top: 8px !important;
+}
+
+.opencode-chat-final::before {
+  color: var(--text-muted);
+  content: "Response";
+  display: block;
+  font-family: var(--font-interface);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.opencode-chat-detail-summary {
+  align-items: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--font-ui-smaller);
+  gap: 6px;
+  height: 24px;
+  line-height: 24px;
+  min-height: 24px;
+  padding: 0 0 0 2px;
+  user-select: none;
+}
+
+.opencode-chat-detail {
+  border-top: 0;
+  box-sizing: border-box;
+  margin: 0 0 4px 0;
+  min-height: 24px;
+  overflow: visible;
+  padding: 0 4px 0 18px;
+  position: relative;
+}
+
+.opencode-chat-detail:not([open]) {
+  height: 24px;
+}
+
+.opencode-chat-detail + .opencode-chat-detail {
+  margin-top: 0;
+}
+
+.opencode-chat-detail::before {
+  background: var(--background-modifier-border);
+  bottom: 0;
+  content: "";
+  left: 0;
+  position: absolute;
+  top: 24px;
+  width: 1px;
+}
+
+.opencode-chat-detail:not([open])::before {
+  display: none;
+}
+
+.opencode-chat-detail-tool::before {
+  display: none;
+}
+
+.opencode-chat-detail-summary::marker,
+.opencode-chat-detail-summary::-webkit-details-marker {
+  display: none;
+}
+
+.opencode-chat-detail-icon {
+  align-items: center;
+  background: var(--background-primary);
+  color: var(--text-muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 18px;
+  justify-content: center;
+  margin-left: -18px;
+  overflow: visible;
+  position: relative;
+  width: 18px;
+  z-index: 1;
+}
+
+.opencode-chat-detail-icon svg {
+  height: 13px;
+  width: 13px;
+}
+
+.opencode-chat-detail-title {
+  font-size: var(--font-ui-small);
+  line-height: 24px;
+}
+
+.opencode-chat-detail-text {
+  background: transparent;
+  border: 0;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 2px 0 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.opencode-chat-detail-tool .opencode-chat-detail-text {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  padding: 8px 34px 8px 10px;
+}
+
+.opencode-chat-detail-tool .opencode-chat-detail-text-wrap {
+  margin-left: -18px;
+}

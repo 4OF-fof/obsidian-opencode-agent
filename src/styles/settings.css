@@ -1,0 +1,32 @@
+.opencode-chat-settings-list {
+  margin-bottom: 12px;
+}
+
+.opencode-chat-settings-empty,
+.opencode-chat-settings-loading {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  padding: 10px 0;
+}
+
+.opencode-chat-settings-subheading {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+  padding: 12px 0 4px;
+}
+
+.opencode-chat-settings-picker {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  left: auto;
+  margin: 6px 0 12px;
+  max-height: none;
+  min-width: 0;
+  overflow: visible;
+  position: static;
+  top: auto;
+  width: 100%;
+  z-index: auto;
+}

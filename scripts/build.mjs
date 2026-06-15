@@ -1,12 +1,28 @@
 import esbuild from "esbuild";
 import builtinModules from "builtin-modules";
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const watch = process.argv.includes("--watch");
 const root = process.cwd();
 const dist = join(root, "dist");
-const staticFiles = ["manifest.json", "styles.css", "README.md"];
+const stylesDir = join(root, "src", "styles");
+const staticFiles = ["manifest.json", "README.md"];
+
+function buildStyles() {
+  mkdirSync(dist, { recursive: true });
+
+  const styleFiles = readFileSync(join(root, "styles.css"), "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.match(/^@import url\("\.\/src\/styles\/([^"]+\.css)"\);$/)?.[1])
+    .filter(Boolean);
+
+  const styles = styleFiles
+    .map((file) => readFileSync(join(stylesDir, file), "utf8").trim())
+    .join("\n\n");
+
+  writeFileSync(join(dist, "styles.css"), `${styles}\n`);
+}
 
 function copyStaticFiles() {
   mkdirSync(dist, { recursive: true });
@@ -16,6 +32,7 @@ function copyStaticFiles() {
   }
 }
 
+buildStyles();
 copyStaticFiles();
 
 const buildOptions = {

@@ -1,0 +1,63 @@
+.opencode-chat-header {
+  align-items: center;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  min-height: 34px;
+  padding: 5px 8px;
+}
+
+.opencode-chat-header-button {
+  --button-radius: 0;
+  --button-shadow: none;
+  --button-shadow-hover: none;
+  --input-height: 24px;
+  appearance: none;
+  -webkit-appearance: none;
+  align-items: center;
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 24px;
+  height: 24px;
+  justify-content: center;
+  margin: 0;
+  min-height: 0;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+  width: 24px;
+}
+
+.opencode-chat-header-button:hover,
+.opencode-chat-header-button:focus,
+.opencode-chat-header-button:focus-visible {
+  background: var(--background-modifier-hover) !important;
+  border: 0 !important;
+  border-radius: 4px;
+  box-shadow: none !important;
+  color: var(--text-normal);
+  outline: none;
+}
+
+.opencode-chat-header-button svg {
+  height: 15px;
+  width: 15px;
+}
+
+.opencode-chat-header-title {
+  color: var(--text-normal);
+  flex: 1;
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,22 @@
+.opencode-chat-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0;
+  padding: 0;
+  background: var(--background-primary);
+}
+
+.opencode-chat-view .is-hidden {
+  display: none !important;
+}
+
+.opencode-chat-history {
+  background: var(--background-primary);
+  border: 0;
+  border-radius: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 8px 10px 24px;
+  box-shadow: none;
+}
