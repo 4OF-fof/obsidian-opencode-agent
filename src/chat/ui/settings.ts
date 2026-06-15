@@ -1,5 +1,5 @@
 import { App, PluginSettingTab, setIcon, Setting } from "obsidian";
-import OpenCodeChatPlugin from "../plugin/plugin";
+import OpenCodeChatPlugin from "../plugin";
 import { ReasoningEffort } from "../shared/types";
 import { effortLabel, formatError, selectedModelValue, updateEffortFavorite, updateStringFavorite } from "./helpers";
 

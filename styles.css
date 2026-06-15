@@ -1,8 +1,8 @@
-@import url("./src/styles/base.css");
-@import url("./src/styles/header.css");
-@import url("./src/styles/messages.css");
-@import url("./src/styles/composer.css");
-@import url("./src/styles/controls.css");
-@import url("./src/styles/settings.css");
-@import url("./src/styles/sessions.css");
-@import url("./src/styles/interactions.css");
+@import url("./src/chat/styles/base.css");
+@import url("./src/chat/styles/header.css");
+@import url("./src/chat/styles/messages.css");
+@import url("./src/chat/styles/composer.css");
+@import url("./src/chat/styles/controls.css");
+@import url("./src/chat/styles/settings.css");
+@import url("./src/chat/styles/sessions.css");
+@import url("./src/chat/styles/interactions.css");

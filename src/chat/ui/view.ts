@@ -1,6 +1,6 @@
 import { ItemView, MarkdownRenderer, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import { ChatMessage, ChatMessageDetail, OpenCodeSessionOption, ReasoningEffort } from "../shared/types";
-import OpenCodeChatPlugin from "../plugin/plugin";
+import OpenCodeChatPlugin from "../plugin";
 import { effortLabel, formatError, selectedModelValue, updateEffortFavorite, updateStringFavorite } from "./helpers";
 
 export const VIEW_TYPE_OPENCODE_CHAT = "opencode-chat-view";

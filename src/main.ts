@@ -1,3 +1,3 @@
-import OpenCodeChatPlugin from "./plugin/plugin";
+import OpenCodeAgentPlugin from "./plugin/plugin";
 
-export default OpenCodeChatPlugin;
+export default OpenCodeAgentPlugin;
