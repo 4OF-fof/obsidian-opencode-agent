@@ -1,4 +1,4 @@
-import { Plugin, setIcon, TFile } from "obsidian";
+import { Plugin, setIcon, TFile, TFolder } from "obsidian";
 
 export class AgentFileIcons {
   private fileExplorerObserver: MutationObserver | null = null;
@@ -69,20 +69,41 @@ export class AgentFileIcons {
 
   private refreshIcons(): void {
     const agentPaths = new Set(this.listAgentFiles().map((file) => file.path));
+    const skillFolderPaths = new Set(this.listSkillFolders().map((folder) => folder.path));
     const fileTitleEls = document.querySelectorAll<HTMLElement>(".nav-file-title[data-path]");
+    const folderTitleEls = document.querySelectorAll<HTMLElement>(".nav-folder-title[data-path]");
 
     for (const titleEl of fileTitleEls) {
-      this.updateFileTitleIcon(titleEl, agentPaths);
+      this.updateTitleIcon(titleEl, {
+        paths: agentPaths,
+        contentSelector: ".nav-file-title-content",
+        icon: "bot",
+      });
+    }
+
+    for (const titleEl of folderTitleEls) {
+      this.updateTitleIcon(titleEl, {
+        paths: skillFolderPaths,
+        contentSelector: ".nav-folder-title-content",
+        icon: "sparkles",
+      });
     }
   }
 
-  private updateFileTitleIcon(titleEl: HTMLElement, agentPaths: Set<string>): void {
+  private updateTitleIcon(
+    titleEl: HTMLElement,
+    options: {
+      paths: Set<string>;
+      contentSelector: string;
+      icon: string;
+    },
+  ): void {
     const path = titleEl.dataset.path;
     titleEl.querySelector(".opencode-agent-config-file-label")?.remove();
     titleEl.removeClass("opencode-agent-config-special-file");
     const iconEl = titleEl.querySelector(".opencode-agent-config-file-icon");
 
-    if (!path || !agentPaths.has(path)) {
+    if (!path || !options.paths.has(path)) {
       iconEl?.remove();
       return;
     }
@@ -91,7 +112,7 @@ export class AgentFileIcons {
       return;
     }
 
-    const titleContentEl = titleEl.querySelector(".nav-file-title-content");
+    const titleContentEl = titleEl.querySelector(options.contentSelector);
     if (!titleContentEl) {
       return;
     }
@@ -100,7 +121,7 @@ export class AgentFileIcons {
       cls: "opencode-agent-config-file-icon",
       attr: { "aria-hidden": "true" },
     });
-    setIcon(agentIconEl, "bot");
+    setIcon(agentIconEl, options.icon);
     titleContentEl.prepend(agentIconEl);
   }
 
@@ -108,6 +129,14 @@ export class AgentFileIcons {
     return this.plugin.app.vault
       .getMarkdownFiles()
       .filter((file) => file.name.toLowerCase() === "agents.md")
+      .sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  private listSkillFolders(): TFolder[] {
+    return this.plugin.app.vault
+      .getMarkdownFiles()
+      .filter((file) => file.name === "SKILL.md" && file.parent)
+      .map((file) => file.parent as TFolder)
       .sort((a, b) => a.path.localeCompare(b.path));
   }
 }
