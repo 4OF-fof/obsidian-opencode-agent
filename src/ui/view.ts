@@ -64,7 +64,7 @@ export class OpenCodeChatView extends ItemView {
     this.sessionPickerWrapEl = headerEl.createDiv({ cls: "opencode-chat-picker-wrap opencode-chat-session-picker-wrap" });
     this.sessionPickerButtonEl = this.sessionPickerWrapEl.createEl("button", {
       cls: "opencode-chat-picker opencode-chat-session-picker",
-      attr: { "aria-label": "Session", type: "button" },
+      attr: { "aria-label": "Select session", title: "Select session", type: "button" },
     });
     this.sessionPickerButtonEl.addEventListener("click", () => {
       this.openPickerMenu(this.sessionPickerWrapEl, {
@@ -192,9 +192,6 @@ export class OpenCodeChatView extends ItemView {
       this.messages = messages;
       this.renderMessages();
       this.updatePickerLabels();
-      if (this.screen === "sessions") {
-        this.showChat();
-      }
       void this.populateSessionSelect();
     });
     this.messages = this.plugin.currentSessionMessages();
@@ -531,19 +528,10 @@ export class OpenCodeChatView extends ItemView {
   private renderSessionHistory(): void {
     this.sessionHistoryEl.empty();
 
-    const newChatEl = this.sessionHistoryEl.createDiv({
-      cls: "opencode-session-history-item opencode-session-history-item-new",
-      attr: { role: "button", tabindex: "0", "data-session-id": "" },
-    });
-    this.renderSessionHistoryItemContent(newChatEl, "New chat", "");
-    this.bindSessionHistoryItem(newChatEl, "");
-
     if (this.sessionList.length === 0) {
       this.sessionHistoryEl.createDiv({ cls: "opencode-session-history-empty", text: "No sessions in this vault." });
       return;
     }
-
-    this.sessionHistoryEl.createDiv({ cls: "opencode-session-history-divider" });
 
     for (const session of this.sessionList) {
       const itemEl = this.sessionHistoryEl.createDiv({
