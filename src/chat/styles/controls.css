@@ -253,9 +253,9 @@
 .opencode-chat-picker-favorite:focus-visible,
 .opencode-chat-picker-favorite:hover,
 .opencode-chat-picker-favorite.is-favorite {
-  background: var(--background-modifier-hover) !important;
+  background: transparent !important;
   border: 0 !important;
-  border-radius: 4px;
+  border-radius: 0;
   box-shadow: none !important;
   color: var(--text-accent);
   outline: none;

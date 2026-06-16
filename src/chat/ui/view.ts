@@ -1,4 +1,4 @@
-import { ItemView, MarkdownRenderer, Notice, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import {
   ChatMessage,
   ChatMessageBlock,
@@ -11,6 +11,20 @@ import {
 } from "../shared/types";
 import OpenCodeChatPlugin from "../plugin";
 import { effortLabel, formatError, selectedModelValue, updateEffortFavorite, updateStringFavorite } from "./helpers";
+import { renderMessageBlocks, renderMessageDetails, renderMessageText } from "./message-renderer";
+import { renderPickerMenuContents, setPickerButtonContent } from "./picker-menu";
+import {
+  renderSessionHistory,
+  updateSelectedSessionHistoryItem,
+} from "./session-history";
+import {
+  ActiveChatRequest,
+  ActiveQuestion,
+  DEFAULT_INPUT_PLACEHOLDER,
+  PickerMenuConfig,
+  PickerOption,
+} from "./view-types";
+import { maxInputHeight } from "./view-utils";
 
 export const VIEW_TYPE_OPENCODE_CHAT = "opencode-chat-view";
 
@@ -371,13 +385,14 @@ export class OpenCodeChatView extends ItemView {
         ].filter(Boolean).join(" "),
       });
       if (hasBlocks) {
-        this.renderMessageBlocks(
+        renderMessageBlocks(
           messageEl,
           message.blocks ?? [],
           !message.text && (isActiveAssistantMessage || message === lastAssistantMessage),
+          this,
         );
       } else if (hasDetails) {
-        this.renderMessageDetails(
+        renderMessageDetails(
           messageEl,
           message.details ?? [],
           !message.text && (isActiveAssistantMessage || message === lastAssistantMessage),
@@ -385,7 +400,7 @@ export class OpenCodeChatView extends ItemView {
       }
 
       if (!hasBlocks && message.text) {
-        this.renderMessageText(messageEl, message);
+        renderMessageText(messageEl, message, this);
       } else if (isActiveAssistantMessage && message.role === "assistant" && !hasBlocks && (!message.details || message.details.length === 0)) {
         messageEl.createDiv({
           cls: "opencode-chat-message-waiting",
@@ -768,77 +783,6 @@ export class OpenCodeChatView extends ItemView {
     this.inputEl.style.height = `${Math.min(this.inputEl.scrollHeight, maxInputHeight(this.inputEl))}px`;
   }
 
-  private renderMessageText(parentEl: HTMLElement, message: ChatMessage): void {
-    if (message.role === "assistant") {
-      this.renderAssistantText(parentEl, message.text);
-      return;
-    }
-
-    parentEl.createEl("pre", {
-      cls: "opencode-chat-message-text",
-      text: message.text,
-    });
-  }
-
-  private renderMessageBlocks(parentEl: HTMLElement, blocks: ChatMessageBlock[], openLastDetail: boolean): void {
-    const lastDetailIndex = blocks.findLastIndex((block) => block.type === "detail");
-    blocks.forEach((block, index) => {
-      if (block.type === "text") {
-        this.renderAssistantText(parentEl, block.text);
-        return;
-      }
-
-      this.renderMessageDetail(parentEl, block.detail, openLastDetail && index === lastDetailIndex);
-    });
-  }
-
-  private renderAssistantText(parentEl: HTMLElement, text: string): void {
-    const textEl = parentEl.createDiv({
-      cls: "opencode-chat-message-text opencode-chat-message-markdown opencode-chat-final markdown-rendered",
-    });
-    void MarkdownRenderer.renderMarkdown(normalizeMarkdownText(text), textEl, "", this).catch(() => {
-      textEl.setText(text);
-    });
-  }
-
-  private renderMessageDetails(parentEl: HTMLElement, details: ChatMessageDetail[], openLastDetail: boolean): void {
-    details.forEach((detail, index) => {
-      this.renderMessageDetail(parentEl, detail, openLastDetail && index === details.length - 1);
-    });
-  }
-
-  private renderMessageDetail(parentEl: HTMLElement, detail: ChatMessageDetail, open: boolean): void {
-    const detailEl = parentEl.createEl("details", {
-      cls: `opencode-chat-detail opencode-chat-detail-${detail.kind}`,
-    }) as HTMLDetailsElement;
-    detailEl.open = open;
-    detailEl.createEl("summary", {
-      cls: "opencode-chat-detail-summary",
-    });
-    this.renderDetailSummary(detailEl, detail);
-    if (detail.text) {
-      const textWrapEl = detailEl.createDiv({ cls: "opencode-chat-detail-text-wrap" });
-      textWrapEl.createEl("pre", {
-        cls: "opencode-chat-detail-text",
-        text: detail.text,
-      });
-    }
-  }
-
-  private renderDetailSummary(detailEl: HTMLElement, detail: ChatMessageDetail): void {
-    const summaryEl = detailEl.querySelector(".opencode-chat-detail-summary");
-    if (!(summaryEl instanceof HTMLElement)) {
-      return;
-    }
-
-    const iconEl = summaryEl.createSpan({ cls: "opencode-chat-detail-icon" });
-    setIcon(iconEl, detail.kind === "tool" ? "arrow-right" : "lightbulb");
-    summaryEl.createSpan({
-      cls: "opencode-chat-detail-title",
-      text: detail.kind === "reasoning" ? "思考中" : detail.title,
-    });
-  }
-
   private async populateModelSelect(): Promise<void> {
     const selectedModel = selectedModelValue(this.plugin.settings.providerID, this.plugin.settings.modelID);
     this.modelOptions = [];
@@ -896,11 +840,11 @@ export class OpenCodeChatView extends ItemView {
 
   private updatePickerLabels(): void {
     const selectedSession = this.sessionOptions.find((option) => option.value === this.plugin.currentSessionId());
-    this.setPickerButtonContent(this.sessionPickerButtonEl, selectedSession?.label ?? "新規チャット");
+    setPickerButtonContent(this.sessionPickerButtonEl, selectedSession?.label ?? "新規チャット");
 
     const selectedModel = selectedModelValue(this.plugin.settings.providerID, this.plugin.settings.modelID);
     const selectedModelOption = this.modelOptions.find((option) => option.value === selectedModel);
-    this.setPickerButtonContent(this.modelPickerButtonEl, selectedModelOption?.label ?? "モデルを選択");
+    setPickerButtonContent(this.modelPickerButtonEl, selectedModelOption?.label ?? "モデルを選択");
 
     const effortOptions = this.currentEffortOptions();
     this.effortPickerButtonEl.toggleClass("is-hidden", effortOptions.length === 0);
@@ -910,14 +854,7 @@ export class OpenCodeChatView extends ItemView {
     }
 
     this.normalizeSelectedEffort();
-    this.setPickerButtonContent(this.effortPickerButtonEl, effortLabel(this.plugin.settings.reasoningEffort));
-  }
-
-  private setPickerButtonContent(buttonEl: HTMLButtonElement, label: string): void {
-    buttonEl.empty();
-    buttonEl.createSpan({ cls: "opencode-chat-picker-label", text: label });
-    const iconEl = buttonEl.createSpan({ cls: "opencode-chat-picker-chevron" });
-    setIcon(iconEl, "chevron-down");
+    setPickerButtonContent(this.effortPickerButtonEl, effortLabel(this.plugin.settings.reasoningEffort));
   }
 
   private async showSessionHistory(): Promise<void> {
@@ -955,128 +892,16 @@ export class OpenCodeChatView extends ItemView {
   }
 
   private renderSessionHistory(): void {
-    this.sessionHistoryEl.empty();
-
-    if (this.sessionList.length === 0) {
-      this.sessionHistoryEl.createDiv({ cls: "opencode-session-history-empty", text: "この保管庫にはセッションがありません。" });
-      return;
-    }
-
-    for (const session of this.sessionList) {
-      const itemEl = this.sessionHistoryEl.createDiv({
-        cls: "opencode-session-history-item",
-        attr: { role: "button", tabindex: "0", "data-session-id": session.id },
-      });
-      this.renderSessionHistoryItemContent(itemEl, session.title, formatSessionTime(session.updatedAt));
-      this.addSessionActionButtons(itemEl, session);
-      this.bindSessionHistoryItem(itemEl, session.id);
-    }
-
-    this.updateSelectedSessionHistoryItem();
-  }
-
-  private renderSessionHistoryItemContent(itemEl: HTMLElement, title: string, detail: string): void {
-    const titleEl = itemEl.createDiv({ cls: "opencode-session-history-item-title" });
-    if (itemEl.hasClass("opencode-session-history-item-new")) {
-      const iconEl = titleEl.createSpan({ cls: "opencode-session-history-item-icon" });
-      setIcon(iconEl, "plus");
-      titleEl.createSpan({ cls: "opencode-session-history-item-title-text", text: title });
-    } else {
-      titleEl.createSpan({ cls: "opencode-session-history-item-title-text", text: title });
-    }
-    if (detail) {
-      itemEl.createDiv({ cls: "opencode-session-history-item-detail", text: detail });
-    }
-  }
-
-  private bindSessionHistoryItem(itemEl: HTMLElement, sessionId: string): void {
-    itemEl.addEventListener("click", () => {
-      void this.selectSessionFromHistory(sessionId);
-    });
-    itemEl.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") {
-        return;
-      }
-
-      event.preventDefault();
-      void this.selectSessionFromHistory(sessionId);
-    });
-  }
-
-  private addSessionActionButtons(itemEl: HTMLElement, session: OpenCodeSessionOption): void {
-    const actionEl = itemEl.createDiv({ cls: "opencode-session-history-actions" });
-    const renameButtonEl = actionEl.createEl("button", {
-      cls: "opencode-session-history-action opencode-session-history-rename",
-      attr: { type: "button", "aria-label": "セッション名を変更" },
-    });
-    setIcon(renameButtonEl, "pencil");
-    renameButtonEl.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      this.beginRenameSession(itemEl, session);
-    });
-
-    const deleteButtonEl = actionEl.createEl("button", {
-      cls: "opencode-session-history-action opencode-session-history-delete",
-      attr: { type: "button", "aria-label": "セッションを削除" },
-    });
-    setIcon(deleteButtonEl, "trash-2");
-    deleteButtonEl.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      void this.deleteSession(session);
-    });
-  }
-
-  private beginRenameSession(itemEl: HTMLElement, session: OpenCodeSessionOption): void {
-    const titleEl = itemEl.querySelector(".opencode-session-history-item-title");
-    if (!(titleEl instanceof HTMLElement)) {
-      return;
-    }
-
-    itemEl.addClass("is-editing");
-    titleEl.empty();
-    const inputEl = titleEl.createEl("input", {
-      cls: "opencode-session-history-title-input",
-      attr: { type: "text" },
-      value: session.title,
-    });
-    inputEl.select();
-    inputEl.focus();
-
-    let canceled = false;
-    let saving = false;
-    const save = async (): Promise<void> => {
-      if (saving || canceled) {
-        return;
-      }
-
-      saving = true;
-      const nextTitle = inputEl.value.trim();
-      if (nextTitle && nextTitle !== session.title) {
-        await this.renameSession(session.id, nextTitle);
-      } else {
-        this.renderSessionHistory();
-      }
-    };
-
-    inputEl.addEventListener("click", (event) => event.stopPropagation());
-    inputEl.addEventListener("keydown", (event) => {
-      event.stopPropagation();
-      if (event.key === "Enter") {
-        event.preventDefault();
-        void save();
-        return;
-      }
-
-      if (event.key === "Escape") {
-        event.preventDefault();
-        canceled = true;
-        this.renderSessionHistory();
-      }
-    });
-    inputEl.addEventListener("blur", () => {
-      void save();
+    renderSessionHistory(this.sessionHistoryEl, this.sessionList, {
+      currentSessionId: () => this.plugin.currentSessionId(),
+      onCancelRename: () => this.renderSessionHistory(),
+      onDelete: (session) => {
+        void this.deleteSession(session);
+      },
+      onRename: (sessionId, title) => this.renameSession(sessionId, title),
+      onSelect: (sessionId) => {
+        void this.selectSessionFromHistory(sessionId);
+      },
     });
   }
 
@@ -1132,14 +957,7 @@ export class OpenCodeChatView extends ItemView {
   }
 
   private updateSelectedSessionHistoryItem(): void {
-    const selectedSessionId = this.plugin.currentSessionId();
-    for (const itemEl of Array.from(this.sessionHistoryEl.querySelectorAll(".opencode-session-history-item"))) {
-      if (!(itemEl instanceof HTMLElement)) {
-        continue;
-      }
-
-      itemEl.toggleClass("is-selected", itemEl.dataset.sessionId === selectedSessionId);
-    }
+    updateSelectedSessionHistoryItem(this.sessionHistoryEl, this.plugin.currentSessionId());
   }
 
   private openPickerMenu(parentEl: HTMLElement, config: PickerMenuConfig): void {
@@ -1154,102 +972,10 @@ export class OpenCodeChatView extends ItemView {
     this.activePickerMenuEl = menuEl;
     this.activePickerParentEl = parentEl;
     document.addEventListener("pointerdown", this.handleDocumentPointerDown, true);
-    this.renderPickerMenuContents(menuEl, config);
-  }
-
-  private renderPickerMenuContents(menuEl: HTMLElement, config: PickerMenuConfig): void {
-    menuEl.empty();
-    const newSessionOption = config.kind === "session" ? config.options.find((option) => option.value === "") : undefined;
-    const sectionOptions = newSessionOption ? config.options.filter((option) => option.value !== "") : config.options;
-    const favoriteValues = new Set(config.favoriteValues);
-    const favoriteOptions = sortSelectedFirst(
-      sectionOptions.filter((option) => favoriteValues.has(option.value)),
-      config.selectedValue,
-    );
-    const allOptions = sortSelectedFirst(
-      sectionOptions.filter((option) => !favoriteValues.has(option.value)),
-      config.selectedValue,
-    );
-
-    if (newSessionOption) {
-      this.renderPickerSection(menuEl, "", [newSessionOption], config);
-      if (sectionOptions.length > 0) {
-        menuEl.createDiv({ cls: "opencode-chat-picker-divider" });
-      }
-    }
-
-    if (favoriteOptions.length > 0) {
-      this.renderPickerSection(menuEl, "お気に入り", favoriteOptions, config);
-    }
-
-    if (allOptions.length > 0) {
-      this.renderPickerSection(menuEl, "すべてのオプション", allOptions, config);
-    }
-  }
-
-  private renderPickerSection(
-    menuEl: HTMLElement,
-    title: string,
-    options: PickerOption[],
-    config: PickerMenuConfig,
-  ): void {
-    if (title) {
-      menuEl.createDiv({ cls: "opencode-chat-picker-section", text: title });
-    }
-
-    for (const option of options) {
-      const isNewSession = config.kind === "session" && option.value === "";
-      const itemEl = menuEl.createDiv({
-        cls: `opencode-chat-picker-item${isNewSession ? " opencode-chat-picker-item-new" : ""}`,
-        attr: { role: "button", tabindex: "0" },
-      });
-      if (isNewSession) {
-        const newIconEl = itemEl.createSpan({ cls: "opencode-chat-picker-item-leading-icon" });
-        setIcon(newIconEl, "plus");
-      }
-      itemEl.createSpan({ cls: "opencode-chat-picker-item-label", text: option.label });
-
-      if (!isNewSession) {
-        const selectedIconEl = itemEl.createSpan({ cls: "opencode-chat-picker-item-icon" });
-        if (option.value === config.selectedValue) {
-          setIcon(selectedIconEl, "check");
-        } else {
-          selectedIconEl.addClass("is-empty");
-        }
-      }
-
-      if (config.allowFavorite(option.value)) {
-        const favoriteButtonEl = itemEl.createEl("button", {
-          cls: "opencode-chat-picker-favorite",
-          attr: { type: "button", "aria-label": "お気に入りを切り替え" },
-        });
-        setIcon(favoriteButtonEl, config.favoriteValues.includes(option.value) ? "star" : "star");
-        favoriteButtonEl.toggleClass("is-favorite", config.favoriteValues.includes(option.value));
-        favoriteButtonEl.addEventListener("click", async (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          await config.onToggleFavorite(option.value, !config.favoriteValues.includes(option.value));
-          this.renderPickerMenuContents(menuEl, {
-            ...config,
-            favoriteValues: this.currentFavoriteValuesFor(config),
-          });
-        });
-      } else if (!isNewSession) {
-        itemEl.createSpan({ cls: "opencode-chat-picker-favorite-placeholder" });
-      }
-
-      itemEl.addEventListener("click", async () => {
-        await config.onSelect(option.value);
-        this.closePickerMenu();
-      });
-      itemEl.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") {
-          return;
-        }
-        event.preventDefault();
-        void config.onSelect(option.value).then(() => this.closePickerMenu());
-      });
-    }
+    renderPickerMenuContents(menuEl, config, {
+      currentFavoriteValuesFor: (menuConfig) => this.currentFavoriteValuesFor(menuConfig),
+      closePickerMenu: () => this.closePickerMenu(),
+    });
   }
 
   private currentFavoriteValuesFor(config: PickerMenuConfig): string[] {
@@ -1314,97 +1040,3 @@ export class OpenCodeChatView extends ItemView {
   }
 }
 
-interface PickerOption {
-  value: string;
-  label: string;
-  effortOptions?: ReasoningEffort[];
-}
-
-interface ActiveChatRequest {
-  id: number;
-  interrupted: boolean;
-}
-
-interface ActiveQuestion {
-  request: OpenCodeQuestionRequest;
-  currentIndex: number;
-  selections: string[][];
-  customValues: string[];
-  submitting: boolean;
-  resolve: (resolution: OpenCodeQuestionResolution) => void;
-}
-
-interface PickerMenuConfig {
-  kind: "model" | "effort" | "session";
-  options: PickerOption[];
-  selectedValue: string;
-  favoriteValues: string[];
-  allowFavorite: (value: string) => boolean;
-  onSelect: (value: string) => Promise<void>;
-  onToggleFavorite: (value: string, enabled: boolean) => Promise<void>;
-}
-
-const DEFAULT_INPUT_PLACEHOLDER = "opencode にメッセージ...";
-
-function sortSelectedFirst(options: PickerOption[], selectedValue: string): PickerOption[] {
-  if (!selectedValue) {
-    return options;
-  }
-
-  return [...options].sort((a, b) => {
-    if (a.value === selectedValue) {
-      return -1;
-    }
-    if (b.value === selectedValue) {
-      return 1;
-    }
-    return 0;
-  });
-}
-
-function maxInputHeight(inputEl: HTMLTextAreaElement): number {
-  const style = window.getComputedStyle(inputEl);
-  const minHeight = parseFloat(style.minHeight) || inputEl.clientHeight || 56;
-  return minHeight * 3;
-}
-
-function formatSessionTime(value: number): string {
-  if (!value) {
-    return "";
-  }
-
-  return new Date(value).toLocaleString();
-}
-
-function normalizeMarkdownText(text: string): string {
-  const lines = text
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-    .split("\n");
-  const normalizedLines: string[] = [];
-  let inFence = false;
-  let previousBlank = false;
-
-  for (const line of lines) {
-    if (line.trim().startsWith("```")) {
-      inFence = !inFence;
-      normalizedLines.push(line);
-      previousBlank = false;
-      continue;
-    }
-
-    if (!inFence && line.trim() === "") {
-      if (!previousBlank) {
-        normalizedLines.push(line);
-      }
-      previousBlank = true;
-      continue;
-    }
-
-    normalizedLines.push(line);
-    previousBlank = false;
-  }
-
-  return normalizedLines.join("\n");
-}

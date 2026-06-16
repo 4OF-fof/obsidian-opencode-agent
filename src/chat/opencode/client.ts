@@ -110,13 +110,13 @@ export class OpenCodeClient {
   }
 
   async listSessionQuestions(sessionId: string): Promise<OpenCodeQuestionRequest[]> {
-    try {
-      const response = await this.requestJson<unknown>(`/api/session/${encodeURIComponent(sessionId)}/question`);
-      return extractQuestionRequests(response, sessionId);
-    } catch {
-      const response = await this.requestJson<unknown>("/question");
-      return extractQuestionRequests(response, sessionId);
-    }
+    const responses = await Promise.all([
+      this.requestJson<unknown>(`/api/session/${encodeURIComponent(sessionId)}/question`).catch(() => null),
+      this.requestJson<unknown>("/question").catch(() => null),
+    ]);
+    return dedupeQuestionRequests(
+      responses.flatMap((response) => response === null ? [] : extractQuestionRequests(response, sessionId)),
+    );
   }
 
   async replyQuestion(
@@ -180,11 +180,6 @@ export class OpenCodeClient {
         }
       }
 
-      const completedMessages = assistantMessages.filter(isCompletedAssistantMessageRecord);
-      if (completedMessages.some(isFinalAssistantMessage)) {
-        return completedMessages;
-      }
-
       if (onQuestion) {
         const question = await this.nextPendingQuestion(sessionId, handledQuestionIds);
         if (question) {
@@ -200,6 +195,11 @@ export class OpenCodeClient {
           previousSnapshot = "";
           continue;
         }
+      }
+
+      const completedMessages = assistantMessages.filter(isCompletedAssistantMessageRecord);
+      if (completedMessages.some(isFinalAssistantMessage)) {
+        return completedMessages;
       }
 
       await sleep(POLL_INTERVAL_MS);
@@ -339,6 +339,22 @@ function combineQuestionRequests(requests: OpenCodeQuestionRequest[]): OpenCodeQ
   };
 }
 
+function dedupeQuestionRequests(requests: OpenCodeQuestionRequest[]): OpenCodeQuestionRequest[] {
+  const seen = new Set<string>();
+  const deduped: OpenCodeQuestionRequest[] = [];
+
+  for (const request of requests) {
+    if (seen.has(request.id)) {
+      continue;
+    }
+
+    seen.add(request.id);
+    deduped.push(request);
+  }
+
+  return deduped;
+}
+
 function questionSourceRequests(request: OpenCodeQuestionRequest): OpenCodeQuestionSourceRequest[] {
   return request.sourceRequests ?? [{ id: request.id, questionCount: request.questions.length }];
 }
@@ -367,12 +383,12 @@ function readQuestionRecords(value: unknown): unknown[] {
 }
 
 function isQuestionRequestRecord(value: unknown): boolean {
-  return Boolean(readStringProperty(value, "id") && readStringProperty(value, "sessionID"));
+  return Boolean(readStringProperty(value, "id") && readQuestionSessionId(value));
 }
 
 function readQuestionRequest(value: unknown): OpenCodeQuestionRequest | null {
   const id = readStringProperty(value, "id");
-  const sessionID = readStringProperty(value, "sessionID");
+  const sessionID = readQuestionSessionId(value);
   if (!id || !sessionID) {
     return null;
   }
@@ -401,10 +417,25 @@ function readQuestionInfo(value: unknown): OpenCodeQuestionInfo {
 }
 
 function readQuestionOption(value: unknown): OpenCodeQuestionOption {
+  if (typeof value === "string") {
+    return {
+      label: value,
+      description: "",
+    };
+  }
+
   return {
     label: readStringProperty(value, "label"),
     description: readStringProperty(value, "description"),
   };
+}
+
+function readQuestionSessionId(value: unknown): string {
+  return (
+    readStringProperty(value, "sessionID") ||
+    readStringProperty(value, "sessionId") ||
+    readStringProperty(value, "session_id")
+  );
 }
 
 function isQuestionInfo(value: OpenCodeQuestionInfo): boolean {
