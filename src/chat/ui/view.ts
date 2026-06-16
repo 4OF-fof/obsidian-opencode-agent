@@ -980,9 +980,9 @@ export class OpenCodeChatView extends ItemView {
     if (itemEl.hasClass("opencode-session-history-item-new")) {
       const iconEl = titleEl.createSpan({ cls: "opencode-session-history-item-icon" });
       setIcon(iconEl, "plus");
-      titleEl.createSpan({ text: title });
+      titleEl.createSpan({ cls: "opencode-session-history-item-title-text", text: title });
     } else {
-      titleEl.setText(title);
+      titleEl.createSpan({ cls: "opencode-session-history-item-title-text", text: title });
     }
     if (detail) {
       itemEl.createDiv({ cls: "opencode-session-history-item-detail", text: detail });
