@@ -1,3 +1,4 @@
+import { lstatSync, readlinkSync } from "node:fs";
 import { lstat, mkdir, readlink, symlink } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { Menu, Notice, Plugin, TAbstractFile, TFolder } from "obsidian";
@@ -23,6 +24,10 @@ export class SkillInstaller {
       return;
     }
 
+    if (this.isSkillInstalled(file)) {
+      return;
+    }
+
     menu.addItem((item) => {
       item
         .setTitle("Install SKILL")
@@ -37,6 +42,17 @@ export class SkillInstaller {
     return folder.children.some((child) => child.name === "SKILL.md");
   }
 
+  private isSkillInstalled(folder: TFolder): boolean {
+    const vaultBasePath = this.vaultBasePath();
+    if (!vaultBasePath) {
+      return false;
+    }
+
+    const sourcePath = resolve(vaultBasePath, folder.path);
+    const linkPath = join(vaultBasePath, ".agents", "skills", folder.name);
+    return this.readExistingSkillLinkSync(linkPath) === sourcePath;
+  }
+
   private async installSkill(folder: TFolder): Promise<void> {
     const vaultBasePath = this.vaultBasePath();
     if (!vaultBasePath) {
@@ -44,7 +60,7 @@ export class SkillInstaller {
       return;
     }
 
-    const sourcePath = join(vaultBasePath, folder.path);
+    const sourcePath = resolve(vaultBasePath, folder.path);
     const skillsDir = join(vaultBasePath, ".agents", "skills");
     const linkPath = join(skillsDir, folder.name);
 
@@ -83,6 +99,28 @@ export class SkillInstaller {
       }
 
       const target = await readlink(linkPath);
+      return resolve(dirname(linkPath), target);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ENOENT"
+      ) {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
+  private readExistingSkillLinkSync(linkPath: string): string | null {
+    try {
+      const stat = lstatSync(linkPath);
+      if (!stat.isSymbolicLink()) {
+        return linkPath;
+      }
+
+      const target = readlinkSync(linkPath);
       return resolve(dirname(linkPath), target);
     } catch (error) {
       if (

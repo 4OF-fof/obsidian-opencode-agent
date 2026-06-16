@@ -1,15 +1,16 @@
 import { ItemView, Notice, Plugin, setIcon, WorkspaceLeaf } from "obsidian";
 import { Dirent } from "node:fs";
-import { lstat, readdir, realpath, stat, unlink } from "node:fs/promises";
-import { basename, join, relative, resolve, sep } from "node:path";
+import { lstat, readFile, readdir, realpath, stat, unlink } from "node:fs/promises";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { VaultBasePathProvider } from "./types";
 
 export const VIEW_TYPE_AGENT_CONFIG_LIST = "opencode-agent-config-list-view";
 
 type AgentEntry = {
   name: string;
-  path: string;
+  detail: string;
   openPath: string;
+  sortPath: string;
   uninstallPath?: string;
 };
 
@@ -36,20 +37,11 @@ export class Agent {
 
   async render(containerEl: HTMLElement): Promise<void> {
     this.rootEl = containerEl;
-    containerEl.empty();
-
-    const headerEl = containerEl.createDiv({ cls: "opencode-agent-config-header" });
-    headerEl.createDiv({ cls: "opencode-agent-config-title", text: "Agent" });
-
-    const contentEl = containerEl.createDiv({ cls: "opencode-agent-config-content" });
-    const loadingEl = contentEl.createDiv({
-      cls: "opencode-agent-config-empty",
-      text: "Loading agent config...",
-    });
 
     try {
       const result = await this.scan();
-      loadingEl.remove();
+      containerEl.empty();
+      const contentEl = this.renderFrame(containerEl);
       this.renderSection(contentEl, {
         title: "Skills",
         icon: "sparkles",
@@ -65,9 +57,21 @@ export class Agent {
       });
     } catch (error) {
       console.error("Failed to scan agent config", error);
-      loadingEl.setText("Unable to load agent config.");
+      if (containerEl.childElementCount === 0) {
+        const contentEl = this.renderFrame(containerEl);
+        contentEl.createDiv({
+          cls: "opencode-agent-config-empty",
+          text: "Unable to load agent config.",
+        });
+      }
       new Notice("Unable to load Agent config.");
     }
+  }
+
+  private renderFrame(containerEl: HTMLElement): HTMLElement {
+    const headerEl = containerEl.createDiv({ cls: "opencode-agent-config-header" });
+    headerEl.createDiv({ cls: "opencode-agent-config-title", text: "Agent config" });
+    return containerEl.createDiv({ cls: "opencode-agent-config-content" });
   }
 
   private renderSection(
@@ -108,10 +112,12 @@ export class Agent {
         cls: "opencode-agent-config-item-name",
         text: entry.name,
       });
-      itemEl.createDiv({
-        cls: "opencode-agent-config-item-path",
-        text: entry.path,
-      });
+      if (entry.detail) {
+        itemEl.createDiv({
+          cls: "opencode-agent-config-item-path",
+          text: entry.detail,
+        });
+      }
       itemEl.addEventListener("click", () => {
         void this.plugin.app.workspace.openLinkText(entry.openPath, "", false);
       });
@@ -198,11 +204,13 @@ export class Agent {
       const childVaultPath = normalizeVaultPath(relative(vaultRoot, childAbsolutePath));
 
       if (entry.isFile() && entry.name.toLowerCase() === "agents.md") {
-        const parentPath = normalizeVaultPath(relative(vaultRoot, absolutePath));
+        const parentPath = parentVaultPath(childVaultPath);
+        const preview = await readMarkdownPreview(childAbsolutePath, "\n");
         agents.push({
-          name: parentPath ? basename(parentPath) : "Root",
-          path: parentPath || "/",
+          name: parentPath || "/",
+          detail: preview,
           openPath: childVaultPath,
+          sortPath: parentPath || "/",
         });
         continue;
       }
@@ -241,10 +249,13 @@ export class Agent {
       const openFolderPath = isPathInside(realFolderPath, vaultRoot)
         ? normalizeVaultPath(relative(vaultRoot, realFolderPath))
         : folderPath;
+      const skillFilePath = join(realFolderPath, "SKILL.md");
+      const skillMeta = await readSkillMetadata(skillFilePath);
       skills.push({
-        name: basename(absolutePath),
-        path: folderPath,
+        name: skillMeta.name || basename(absolutePath),
+        detail: skillMeta.description,
         openPath: normalizeVaultPath(join(openFolderPath, "SKILL.md")),
+        sortPath: folderPath,
         uninstallPath: absolutePath,
       });
     }
@@ -320,7 +331,7 @@ export class AgentConfigListView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Agent";
+    return "Agent config";
   }
 
   getIcon(): string {
@@ -334,6 +345,7 @@ export class AgentConfigListView extends ItemView {
 
     this.registerEvent(this.plugin.app.vault.on("create", () => this.scheduleRender()));
     this.registerEvent(this.plugin.app.vault.on("delete", () => this.scheduleRender()));
+    this.registerEvent(this.plugin.app.vault.on("modify", () => this.scheduleRender()));
     this.registerEvent(this.plugin.app.vault.on("rename", () => this.scheduleRender()));
 
     await this.render();
@@ -345,6 +357,10 @@ export class AgentConfigListView extends ItemView {
       this.refreshTimer = null;
     }
     this.containerEl.empty();
+  }
+
+  refresh(): void {
+    this.scheduleRender();
   }
 
   private scheduleRender(): void {
@@ -384,5 +400,68 @@ function isMissingPathError(error: unknown): boolean {
 }
 
 function compareEntries(a: AgentEntry, b: AgentEntry): number {
-  return a.path.localeCompare(b.path);
+  return a.sortPath.localeCompare(b.sortPath);
+}
+
+function parentVaultPath(path: string): string {
+  const parent = dirname(path);
+  return parent === "." ? "" : normalizeVaultPath(parent);
+}
+
+async function readSkillMetadata(path: string): Promise<{ name: string; description: string }> {
+  try {
+    const content = await readFile(path, "utf8");
+    return {
+      name: extractFrontmatterValue(content, "name"),
+      description: extractFrontmatterValue(content, "description") || extractMarkdownPreview(content) || "No description.",
+    };
+  } catch {
+    return { name: "", description: "No description." };
+  }
+}
+
+async function readMarkdownPreview(path: string, separator = " "): Promise<string> {
+  try {
+    return extractMarkdownPreview(await readFile(path, "utf8"), separator);
+  } catch {
+    return "";
+  }
+}
+
+function extractFrontmatterValue(content: string, key: string): string {
+  const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatterMatch) {
+    return "";
+  }
+
+  const valueMatch = frontmatterMatch[1].match(new RegExp(`^${escapeRegExp(key)}:\\s*(.+)$`, "m"));
+  if (!valueMatch) {
+    return "";
+  }
+
+  return cleanSummaryLine(valueMatch[1]);
+}
+
+function extractMarkdownPreview(content: string, separator = " "): string {
+  const withoutFrontmatter = content.replace(/^---\r?\n[\s\S]*?\r?\n---/, "");
+  return withoutFrontmatter
+    .split(/\r?\n/)
+    .map(cleanSummaryLine)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(separator);
+}
+
+function cleanSummaryLine(line: string): string {
+  return line
+    .trim()
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/^[-*+]\s+/, "")
+    .replace(/^>\s?/, "")
+    .replace(/^['"]|['"]$/g, "")
+    .trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

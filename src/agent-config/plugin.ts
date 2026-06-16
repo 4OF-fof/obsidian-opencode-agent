@@ -16,7 +16,10 @@ export class AgentConfigManager {
     this.skillInstaller = new SkillInstaller(
       this.plugin,
       this.vaultBasePath,
-      () => this.agentFileIcons.refresh(),
+      () => {
+        this.agentFileIcons.refresh();
+        this.refreshViews();
+      },
     );
   }
 
@@ -26,13 +29,13 @@ export class AgentConfigManager {
       (leaf) => new AgentConfigListView(leaf, this.plugin, this.vaultBasePath),
     );
 
-    this.plugin.addRibbonIcon("bot", "Agent", () => {
+    this.plugin.addRibbonIcon("bot", "Agent config", () => {
       void this.activateView();
     });
 
     this.plugin.addCommand({
       id: "open-agent-config",
-      name: "Open Agent",
+      name: "Open Agent config",
       callback: () => {
         void this.activateView();
       },
@@ -51,7 +54,7 @@ export class AgentConfigManager {
     if (leaves.length === 0) {
       const leaf = this.plugin.app.workspace.getRightLeaf(false);
       if (!leaf) {
-        new Notice("Unable to open Agent.");
+        new Notice("Unable to open Agent config.");
         return;
       }
 
@@ -70,7 +73,16 @@ export class AgentConfigManager {
     if (leaf) {
       this.plugin.app.workspace.revealLeaf(leaf);
     } else {
-      new Notice("Unable to open Agent.");
+      new Notice("Unable to open Agent config.");
+    }
+  }
+
+  private refreshViews(): void {
+    for (const leaf of this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_AGENT_CONFIG_LIST)) {
+      const view = leaf.view;
+      if (view instanceof AgentConfigListView) {
+        view.refresh();
+      }
     }
   }
 }

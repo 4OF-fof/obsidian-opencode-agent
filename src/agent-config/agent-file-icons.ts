@@ -99,9 +99,12 @@ export class AgentFileIcons {
     },
   ): void {
     const path = titleEl.dataset.path;
-    titleEl.querySelector(".opencode-agent-config-file-label")?.remove();
-    titleEl.removeClass("opencode-agent-config-special-file");
     const iconEl = titleEl.querySelector(".opencode-agent-config-file-icon");
+
+    if (this.isEditingTitle(titleEl)) {
+      iconEl?.remove();
+      return;
+    }
 
     if (!path || !options.paths.has(path)) {
       iconEl?.remove();
@@ -123,6 +126,12 @@ export class AgentFileIcons {
     });
     setIcon(agentIconEl, options.icon);
     titleContentEl.prepend(agentIconEl);
+  }
+
+  private isEditingTitle(titleEl: HTMLElement): boolean {
+    return Boolean(
+      titleEl.querySelector("input, textarea, [contenteditable='true']"),
+    );
   }
 
   private listAgentFiles(): TFile[] {
